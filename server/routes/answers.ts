@@ -40,11 +40,23 @@ router.post('/check', async (req: Request<{}, {}, CheckAnswerRequest>, res: Resp
     // Проверить точное совпадение
     const isCorrect = userAnswer === correctAnswer;
     
+    // Проверить, является ли ответ синонимом (другое англ. слово с тем же русским переводом)
+    let isSynonym = false;
+    if (!isCorrect) {
+      const synonymWord = await prisma.word.findFirst({
+        where: {
+          russian: word.russian,
+          english: userAnswer,
+        }
+      });
+      isSynonym = Boolean(synonymWord);
+    }
+    
     // Проверить частичное совпадение
     let isPartial = false;
     let hint = '';
     
-    if (!isCorrect && userAnswer.length > 0) {
+    if (!isCorrect && !isSynonym && userAnswer.length > 0) {
       // Проверить, является ли ответ началом правильного слова
       if (correctAnswer.startsWith(userAnswer)) {
         isPartial = true;
@@ -67,14 +79,16 @@ router.post('/check', async (req: Request<{}, {}, CheckAnswerRequest>, res: Resp
       data: {
         wordId,
         answer: userAnswer,
-        isCorrect
+        isCorrect,
+        isSynonym
       }
     });
     
     const response: CheckAnswerResponse = {
       isCorrect,
       isPartial,
-      hint: isPartial ? hint : undefined,
+      hint: isSynonym ? 'Это синоним. Попробуйте другое слово.' : (isPartial ? hint : undefined),
+      isSynonym: isSynonym || undefined,
       correctAnswer: word.english
     };
     

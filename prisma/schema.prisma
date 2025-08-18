@@ -9,7 +9,7 @@ datasource db {
 
 model Word {
   id          Int      @id @default(autoincrement())
-  english     String   @unique
+  english     String
   russian     String
   exampleEn   String
   exampleRu   String
@@ -27,6 +27,7 @@ model Answer {
   wordId    Int
   answer    String
   isCorrect Boolean
+  isSynonym Boolean  @default(false)
   createdAt DateTime @default(now())
   
   word      Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)

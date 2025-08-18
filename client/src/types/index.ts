@@ -14,6 +14,7 @@ export interface Answer {
   wordId: number;
   answer: string;
   isCorrect: boolean;
+  isSynonym: boolean;
   createdAt: string;
 }
 
@@ -41,6 +42,7 @@ export interface CheckAnswerResponse {
   isCorrect: boolean;
   isPartial: boolean;
   hint?: string;
+  isSynonym?: boolean;
   correctAnswer: string;
 }
 

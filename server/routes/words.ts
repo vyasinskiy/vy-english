@@ -52,10 +52,19 @@ router.get('/study', async (req: Request, res: Response<ApiResponse<Word>>) => {
     });
     
     if (!word) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'No words available for study' 
+      // Фоллбек: если все слова уже когда-то были отвечены правильно,
+      // вернуть самое раннее по дате создания слово, чтобы не отдавать 404
+      const fallbackWord = await prisma.word.findFirst({
+        where: { ...whereClause },
+        orderBy: { createdAt: 'asc' }
       });
+      if (!fallbackWord) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'No words available for study' 
+        });
+      }
+      return res.json({ success: true, data: fallbackWord });
     }
     
     return res.json({ success: true, data: word });

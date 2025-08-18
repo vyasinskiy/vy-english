@@ -178,6 +178,10 @@ export const StudyCard: React.FC<StudyCardProps> = ({
                 <Alert icon={<CheckCircle />} severity="success">
                   Correct! Well done!
                 </Alert>
+              ) : result.isSynonym ? (
+                <Alert icon={<Info />} severity="info">
+                  Это синоним. Попробуйте другое слово.
+                </Alert>
               ) : result.isPartial ? (
                 <Alert icon={<Info />} severity="info">
                   {result.hint}
