@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Card,
   CardContent,
@@ -35,15 +35,21 @@ export const StudyCard: React.FC<StudyCardProps> = ({
   const [result, setResult] = useState<CheckAnswerResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isExampleRevealed, setIsExampleRevealed] = useState(false);
+  const autoAdvanceTimeoutRef = useRef<number | null>(null);
 
-  const loadNextWord = async () => {
+  const loadNextWord = async (excludeCurrent: boolean = false) => {
     try {
       setLoading(true);
       setError(null);
-      const word = await wordsApi.getStudyWord(favoriteOnly);
+      const word = await wordsApi.getStudyWord(
+        favoriteOnly,
+        excludeCurrent && currentWord ? currentWord.id : undefined
+      );
       setCurrentWord(word);
       setAnswer('');
       setResult(null);
+      setIsExampleRevealed(false);
     } catch (err: unknown) {
       setError('Failed to load word');
     } finally {
@@ -69,9 +75,14 @@ export const StudyCard: React.FC<StudyCardProps> = ({
       setResult(result);
       
       if (result.isCorrect) {
-        setTimeout(() => {
+        if (autoAdvanceTimeoutRef.current) {
+          window.clearTimeout(autoAdvanceTimeoutRef.current);
+          autoAdvanceTimeoutRef.current = null;
+        }
+        autoAdvanceTimeoutRef.current = window.setTimeout(() => {
           onWordCompleted();
           loadNextWord();
+          autoAdvanceTimeoutRef.current = null;
         }, 2000);
       }
     } catch (err: unknown) {
@@ -92,6 +103,12 @@ export const StudyCard: React.FC<StudyCardProps> = ({
     }
   };
 
+  const handleRevealExample = () => {
+    if (!isExampleRevealed) {
+      setIsExampleRevealed(true);
+    }
+  };
+
   if (loading && !currentWord) {
     return (
       <Card sx={{ minWidth: 400, textAlign: 'center', p: 4 }}>
@@ -106,7 +123,7 @@ export const StudyCard: React.FC<StudyCardProps> = ({
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
-        <Button variant="contained" onClick={loadNextWord}>
+        <Button variant="contained" onClick={() => loadNextWord()}>
           Try Again
         </Button>
       </Card>
@@ -156,9 +173,33 @@ export const StudyCard: React.FC<StudyCardProps> = ({
           <Typography variant="body2" color="text.secondary" gutterBottom>
             Example in English:
           </Typography>
-          <Typography variant="body1" sx={{ fontStyle: 'italic' }}>
-            {currentWord.exampleEn}
-          </Typography>
+          <Box
+            onClick={handleRevealExample}
+            sx={{
+              position: 'relative',
+              cursor: isExampleRevealed ? 'default' : 'pointer',
+              userSelect: isExampleRevealed ? 'text' : 'none',
+            }}
+          >
+            <Typography
+              variant="body1"
+              sx={{
+                fontStyle: 'italic',
+                filter: isExampleRevealed ? 'none' : 'blur(6px)',
+                transition: 'filter 0.2s ease',
+              }}
+            >
+              {currentWord.exampleEn}
+            </Typography>
+            {!isExampleRevealed && (
+              <Chip
+                size="small"
+                label="Click to reveal"
+                color="primary"
+                sx={{ position: 'absolute', top: -8, right: 0 }}
+              />
+            )}
+          </Box>
         </Box>
 
         <form onSubmit={handleSubmit}>
@@ -167,10 +208,18 @@ export const StudyCard: React.FC<StudyCardProps> = ({
             label="Enter English word"
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
-            disabled={loading || result?.isCorrect}
+            disabled={loading || result?.isCorrect || isExampleRevealed}
             autoFocus
             sx={{ mb: 2 }}
           />
+
+          {isExampleRevealed && (
+            <Box mb={2}>
+              <Alert icon={<Info />} severity="info">
+                English example revealed. Input is locked. Click Next to continue.
+              </Alert>
+            </Box>
+          )}
 
           {result && (
             <Box mb={2}>
@@ -198,7 +247,7 @@ export const StudyCard: React.FC<StudyCardProps> = ({
             type="submit"
             variant="contained"
             fullWidth
-            disabled={loading || !answer.trim() || result?.isCorrect}
+            disabled={loading || !answer.trim() || result?.isCorrect || isExampleRevealed}
           >
             {loading ? 'Checking...' : 'Check Answer'}
           </Button>
@@ -217,6 +266,25 @@ export const StudyCard: React.FC<StudyCardProps> = ({
             Try Again
           </Button>
         )}
+
+        <Button
+          variant="text"
+          fullWidth
+          sx={{ mt: 1 }}
+          disabled={loading}
+          onClick={() => {
+            if (autoAdvanceTimeoutRef.current) {
+              window.clearTimeout(autoAdvanceTimeoutRef.current);
+              autoAdvanceTimeoutRef.current = null;
+            }
+            if (result?.isCorrect) {
+              onWordCompleted();
+            }
+            loadNextWord(true);
+          }}
+        >
+          Next
+        </Button>
       </CardContent>
     </Card>
   );

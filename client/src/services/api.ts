@@ -33,8 +33,11 @@ export const wordsApi = {
     return response.data.data!;
   },
 
-  getStudyWord: async (favoriteOnly: boolean = false): Promise<Word> => {
-    const response = await api.get<ApiResponse<Word>>(`/words/study?favoriteOnly=${favoriteOnly}`);
+  getStudyWord: async (favoriteOnly: boolean = false, excludeId?: number): Promise<Word> => {
+    const params = new URLSearchParams();
+    params.set('favoriteOnly', String(favoriteOnly));
+    if (excludeId) params.set('excludeId', String(excludeId));
+    const response = await api.get<ApiResponse<Word>>(`/words/study?${params.toString()}`);
     if (!response.data.success) {
       throw new Error(response.data.error);
     }

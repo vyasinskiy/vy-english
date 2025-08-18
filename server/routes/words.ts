@@ -30,7 +30,7 @@ router.get('/', async (req: Request, res: Response<ApiResponse<Word[]>>) => {
 // Получить слово для изучения (без правильного ответа)
 router.get('/study', async (req: Request, res: Response<ApiResponse<Word>>) => {
   try {
-    const { favoriteOnly } = req.query;
+    const { favoriteOnly, excludeId } = req.query as { favoriteOnly?: string; excludeId?: string };
     
     let whereClause: any = {};
     
@@ -38,36 +38,59 @@ router.get('/study', async (req: Request, res: Response<ApiResponse<Word>>) => {
       whereClause.isFavorite = true;
     }
     
-    // Найти слово, на которое еще не дан правильный ответ
-    const word = await prisma.word.findFirst({
-      where: {
-        ...whereClause,
-        answers: {
-          none: {
-            isCorrect: true
-          }
+    // Условие исключения текущего слова (если передан excludeId)
+    const excludeCondition = excludeId ? { id: { not: parseInt(excludeId) } } : {};
+
+    // Пул слов без правильных ответов
+    const whereUnlearned = {
+      ...whereClause,
+      ...excludeCondition,
+      answers: {
+        none: {
+          isCorrect: true
         }
-      },
-      orderBy: { createdAt: 'asc' }
-    });
-    
-    if (!word) {
-      // Фоллбек: если все слова уже когда-то были отвечены правильно,
-      // вернуть самое раннее по дате создания слово, чтобы не отдавать 404
-      const fallbackWord = await prisma.word.findFirst({
-        where: { ...whereClause },
-        orderBy: { createdAt: 'asc' }
-      });
-      if (!fallbackWord) {
-        return res.status(404).json({ 
-          success: false, 
-          error: 'No words available for study' 
-        });
       }
-      return res.json({ success: true, data: fallbackWord });
+    } as const;
+
+    const totalUnlearned = await prisma.word.count({ where: whereUnlearned });
+
+    if (totalUnlearned > 0) {
+      const randomSkip = Math.floor(Math.random() * totalUnlearned);
+      const candidates = await prisma.word.findMany({
+        where: whereUnlearned,
+        skip: randomSkip,
+        take: 1
+      });
+      if (candidates[0]) {
+        return res.json({ success: true, data: candidates[0] });
+      }
     }
-    
-    return res.json({ success: true, data: word });
+
+    // Фоллбек: любой подходящий пул (например, когда все уже когда-то были отвечены)
+    const whereAny = {
+      ...whereClause,
+      ...excludeCondition,
+    } as const;
+
+    const totalAny = await prisma.word.count({ where: whereAny });
+    if (totalAny === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'No words available for study' 
+      });
+    }
+
+    const randomSkipAny = Math.floor(Math.random() * totalAny);
+    const anyCandidates = await prisma.word.findMany({
+      where: whereAny,
+      skip: randomSkipAny,
+      take: 1
+    });
+    if (anyCandidates[0]) {
+      return res.json({ success: true, data: anyCandidates[0] });
+    }
+
+    return res.status(404).json({ success: false, error: 'No words available for study' });
   } catch (error) {
     console.error('Error fetching study word:', error);
     return res.status(500).json({ 
