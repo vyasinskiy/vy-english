@@ -103,7 +103,9 @@ export const StudyCard: React.FC<StudyCardProps> = ({
       });
       setResult(result);
       setTodayCorrectAnswers(result.todayCorrectAnswers);
-      setSnackbarOpen(true);
+      if (result.isCorrect || result.isSynonym) {
+        setSnackbarOpen(true);
+      }
       if (result.isSynonym) {
         setEnteredSynonyms((prev) => [...prev, answer]);
         setAnswer('');
