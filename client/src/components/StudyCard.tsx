@@ -10,6 +10,10 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   Favorite,
@@ -17,8 +21,9 @@ import {
   CheckCircle,
   Error,
   Info,
+  Edit,
 } from '@mui/icons-material';
-import { Word, CheckAnswerResponse } from '../types';
+import { Word, CheckAnswerResponse, UpdateWordRequest } from '../types';
 import { wordsApi, answersApi } from '../services/api';
 
 interface StudyCardProps {
@@ -30,16 +35,27 @@ export const StudyCard: React.FC<StudyCardProps> = ({
   onWordCompleted, 
   favoriteOnly = false 
 }) => {
+  const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [shouldFocusInput, setShouldFocusInput] = useState(false);
   const [currentWord, setCurrentWord] = useState<Word | null>(null);
   const [answer, setAnswer] = useState('');
   const [result, setResult] = useState<CheckAnswerResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isExampleRevealed, setIsExampleRevealed] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [formData, setFormData] = useState<UpdateWordRequest>({
+    english: '',
+    russian: '',
+    exampleEn: '',
+    exampleRu: '',
+  });
+  const [enteredSynonyms, setEnteredSynonyms] = useState<string[]>([]);
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
 
   const loadNextWord = async (excludeCurrent: boolean = false) => {
-    try {
+  try {
       setLoading(true);
       setError(null);
       const word = await wordsApi.getStudyWord(
@@ -49,13 +65,24 @@ export const StudyCard: React.FC<StudyCardProps> = ({
       setCurrentWord(word);
       setAnswer('');
       setResult(null);
-      setIsExampleRevealed(false);
+  setIsExampleRevealed(false);
+  setIsAnswerRevealed(false);
+  setShouldFocusInput(true);
     } catch (err: unknown) {
       setError('Failed to load word');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (shouldFocusInput) {
+      setShouldFocusInput(false);
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
+  }, [shouldFocusInput, currentWord]);
 
   useEffect(() => {
     loadNextWord();
@@ -71,10 +98,14 @@ export const StudyCard: React.FC<StudyCardProps> = ({
         wordId: currentWord.id,
         answer: answer.trim(),
       });
-      
       setResult(result);
-      
+      if (result.isSynonym) {
+        setEnteredSynonyms((prev) => [...prev, answer]);
+        setAnswer('');
+        setShouldFocusInput(true);
+      }
       if (result.isCorrect) {
+        setEnteredSynonyms([]);
         if (autoAdvanceTimeoutRef.current) {
           window.clearTimeout(autoAdvanceTimeoutRef.current);
           autoAdvanceTimeoutRef.current = null;
@@ -100,6 +131,33 @@ export const StudyCard: React.FC<StudyCardProps> = ({
       setCurrentWord(updatedWord);
     } catch (err: unknown) {
       setError('Failed to toggle favorite');
+    }
+  };
+
+  const handleEditOpen = () => {
+    if (!currentWord) return;
+    setFormData({
+      english: currentWord.english,
+      russian: currentWord.russian,
+      exampleEn: currentWord.exampleEn,
+      exampleRu: currentWord.exampleRu,
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!currentWord) return;
+
+    try {
+      await wordsApi.update(currentWord.id, formData);
+      setEditDialogOpen(false);
+      if (autoAdvanceTimeoutRef.current) {
+        window.clearTimeout(autoAdvanceTimeoutRef.current);
+        autoAdvanceTimeoutRef.current = null;
+      }
+      loadNextWord(true);
+    } catch (err: unknown) {
+      setError('Failed to save word');
     }
   };
 
@@ -147,17 +205,25 @@ export const StudyCard: React.FC<StudyCardProps> = ({
   }
 
   return (
-    <Card sx={{ minWidth: 400, maxWidth: 600 }}>
-      <CardContent>
+    <>
+      <Card sx={{ minWidth: 400, maxWidth: 600 }}>
+        <CardContent>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
           <Typography variant="h5" component="div">
             {currentWord.russian}
           </Typography>
-          <Tooltip title={currentWord.isFavorite ? 'Remove from favorites' : 'Add to favorites'}>
-            <IconButton onClick={handleToggleFavorite} color="primary">
-              {currentWord.isFavorite ? <Favorite /> : <FavoriteBorder />}
-            </IconButton>
-          </Tooltip>
+          <Box display="flex" alignItems="center">
+            <Tooltip title={currentWord.isFavorite ? 'Remove from favorites' : 'Add to favorites'}>
+              <IconButton onClick={handleToggleFavorite} color="primary">
+                {currentWord.isFavorite ? <Favorite /> : <FavoriteBorder />}
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Edit word">
+              <IconButton onClick={handleEditOpen} color="primary">
+                <Edit />
+              </IconButton>
+            </Tooltip>
+          </Box>
         </Box>
 
         <Box mb={3}>
@@ -202,16 +268,26 @@ export const StudyCard: React.FC<StudyCardProps> = ({
           </Box>
         </Box>
 
-        <form onSubmit={handleSubmit}>
+  <form onSubmit={handleSubmit}>
+
           <TextField
             fullWidth
             label="Enter English word"
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
-            disabled={loading || result?.isCorrect || isExampleRevealed}
-            autoFocus
+            disabled={loading || result?.isCorrect || isExampleRevealed || isAnswerRevealed}
+            inputRef={inputRef}
             sx={{ mb: 2 }}
+            autoComplete="off"
           />
+
+          {isAnswerRevealed && (
+            <Box mb={1}>
+              <Alert icon={<CheckCircle />} severity="info">
+                Correct answer: <strong>{currentWord.english}</strong>
+              </Alert>
+            </Box>
+          )}
 
           {isExampleRevealed && (
             <Box mb={2}>
@@ -229,7 +305,12 @@ export const StudyCard: React.FC<StudyCardProps> = ({
                 </Alert>
               ) : result.isSynonym ? (
                 <Alert icon={<Info />} severity="info">
-                  Это синоним. Попробуйте другое слово.
+                  This is synonym, try another word. Entered synonyms:<br></br>
+                  <ul style={{ margin: 0, paddingLeft: 20 }}>
+                    {enteredSynonyms.map((syn, idx) => (
+                      <li key={idx}><strong>{syn}</strong></li>
+                    ))}
+                  </ul>
                 </Alert>
               ) : result.isPartial ? (
                 <Alert icon={<Info />} severity="info">
@@ -244,28 +325,25 @@ export const StudyCard: React.FC<StudyCardProps> = ({
           )}
 
           <Button
+            variant="text"
+            color="secondary"
+            fullWidth
+            sx={{ mt: 1, mb: 1 }}
+            onClick={() => setIsAnswerRevealed(true)}
+            disabled={isAnswerRevealed || Boolean(result && !result.isCorrect && !result.isPartial && !result.isSynonym)}
+          >
+            Show Answer
+          </Button>
+
+          <Button
             type="submit"
             variant="contained"
             fullWidth
-            disabled={loading || !answer.trim() || result?.isCorrect || isExampleRevealed}
+            disabled={loading || !answer.trim() || result?.isCorrect || isExampleRevealed || isAnswerRevealed || Boolean(result && !result.isCorrect && !result.isPartial && !result.isSynonym)}
           >
             {loading ? 'Checking...' : 'Check Answer'}
           </Button>
         </form>
-
-        {result && !result.isCorrect && (
-          <Button
-            variant="outlined"
-            fullWidth
-            sx={{ mt: 1 }}
-            onClick={() => {
-              setAnswer('');
-              setResult(null);
-            }}
-          >
-            Try Again
-          </Button>
-        )}
 
         <Button
           variant="text"
@@ -273,6 +351,7 @@ export const StudyCard: React.FC<StudyCardProps> = ({
           sx={{ mt: 1 }}
           disabled={loading}
           onClick={() => {
+            setEnteredSynonyms([]);
             if (autoAdvanceTimeoutRef.current) {
               window.clearTimeout(autoAdvanceTimeoutRef.current);
               autoAdvanceTimeoutRef.current = null;
@@ -285,7 +364,50 @@ export const StudyCard: React.FC<StudyCardProps> = ({
         >
           Next
         </Button>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+
+      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit Word</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="English"
+            value={formData.english}
+            onChange={(e) => setFormData({ ...formData, english: e.target.value })}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Russian"
+            value={formData.russian}
+            onChange={(e) => setFormData({ ...formData, russian: e.target.value })}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Example (English)"
+            value={formData.exampleEn}
+            onChange={(e) => setFormData({ ...formData, exampleEn: e.target.value })}
+            margin="normal"
+            multiline
+            rows={2}
+          />
+          <TextField
+            fullWidth
+            label="Example (Russian)"
+            value={formData.exampleRu}
+            onChange={(e) => setFormData({ ...formData, exampleRu: e.target.value })}
+            margin="normal"
+            multiline
+            rows={2}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleSaveEdit} variant="contained">Save</Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };
