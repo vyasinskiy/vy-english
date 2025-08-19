@@ -10,6 +10,7 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  Snackbar,
 } from '@mui/material';
 import {
   Favorite,
@@ -36,6 +37,8 @@ export const StudyCard: React.FC<StudyCardProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isExampleRevealed, setIsExampleRevealed] = useState(false);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [todayCorrectAnswers, setTodayCorrectAnswers] = useState(0);
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
 
   const loadNextWord = async (excludeCurrent: boolean = false) => {
@@ -71,8 +74,10 @@ export const StudyCard: React.FC<StudyCardProps> = ({
         wordId: currentWord.id,
         answer: answer.trim(),
       });
-      
+
       setResult(result);
+      setTodayCorrectAnswers(result.todayCorrectAnswers);
+      setSnackbarOpen(true);
       
       if (result.isCorrect) {
         if (autoAdvanceTimeoutRef.current) {
@@ -147,6 +152,7 @@ export const StudyCard: React.FC<StudyCardProps> = ({
   }
 
   return (
+    <>
     <Card sx={{ minWidth: 400, maxWidth: 600 }}>
       <CardContent>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
@@ -287,5 +293,16 @@ export const StudyCard: React.FC<StudyCardProps> = ({
         </Button>
       </CardContent>
     </Card>
+    <Snackbar
+      open={snackbarOpen}
+      autoHideDuration={3000}
+      onClose={() => setSnackbarOpen(false)}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+    >
+      <Alert onClose={() => setSnackbarOpen(false)} severity="info" sx={{ width: '100%' }}>
+        Correct answers today: {todayCorrectAnswers}
+      </Alert>
+    </Snackbar>
+    </>
   );
 };
