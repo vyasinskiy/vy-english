@@ -42,8 +42,9 @@ router.post('/check', async (req: Request<{}, {}, CheckAnswerRequest>, res: Resp
     
     // Проверить, является ли ответ синонимом (другое англ. слово с тем же русским переводом)
     let isSynonym = false;
+    let synonymWord: { id: number } | null = null;
     if (!isCorrect) {
-      const synonymWord = await prisma.word.findFirst({
+      synonymWord = await prisma.word.findFirst({
         where: {
           russian: word.russian,
           english: userAnswer,
@@ -83,13 +84,49 @@ router.post('/check', async (req: Request<{}, {}, CheckAnswerRequest>, res: Resp
         isSynonym
       }
     });
-    
+
+    // Если введено слово-синоним, пометить его как изученное
+    if (isSynonym && synonymWord) {
+      const existingCorrect = await prisma.answer.findFirst({
+        where: { wordId: synonymWord.id, isCorrect: true }
+      });
+      if (!existingCorrect) {
+        await prisma.answer.create({
+          data: {
+            wordId: synonymWord.id,
+            answer: userAnswer,
+            isCorrect: true
+          }
+        });
+      }
+    }
+
+    // Посчитать количество правильных ответов за сегодня
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const todayCorrectAnswers = await prisma.answer.count({
+      where: {
+        isCorrect: true,
+        createdAt: {
+          gte: startOfDay,
+          lte: endOfDay
+        }
+      }
+    });
+
+    const totalWords = await prisma.word.count();
+
     const response: CheckAnswerResponse = {
       isCorrect,
       isPartial,
       hint: isSynonym ? 'Это синоним. Попробуйте другое слово.' : (isPartial ? hint : undefined),
       isSynonym: isSynonym || undefined,
-      correctAnswer: word.english
+      correctAnswer: word.english,
+      todayCorrectAnswers,
+      totalWords
     };
     
     return res.json({ success: true, data: response });

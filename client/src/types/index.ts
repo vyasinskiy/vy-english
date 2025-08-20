@@ -44,6 +44,8 @@ export interface CheckAnswerResponse {
   hint?: string;
   isSynonym?: boolean;
   correctAnswer: string;
+  todayCorrectAnswers: number;
+  totalWords: number;
 }
 
 export interface ApiResponse<T> {
