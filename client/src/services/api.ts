@@ -6,7 +6,8 @@ import {
   CheckAnswerRequest, 
   CheckAnswerResponse, 
   ApiResponse, 
-  Stats 
+  Stats, 
+  StudyWordResponse
 } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5500/api';
@@ -33,11 +34,11 @@ export const wordsApi = {
     return response.data.data!;
   },
 
-  getStudyWord: async (favoriteOnly: boolean = false, excludeId?: number): Promise<Word> => {
+  getStudyWord: async (favoriteOnly: boolean = false, excludeId?: number): Promise<StudyWordResponse> => {
     const params = new URLSearchParams();
     params.set('favoriteOnly', String(favoriteOnly));
     if (excludeId) params.set('excludeId', String(excludeId));
-    const response = await api.get<ApiResponse<Word>>(`/words/study?${params.toString()}`);
+    const response = await api.get<ApiResponse<StudyWordResponse>>(`/words/study?${params.toString()}`);
     if (!response.data.success) {
       throw new Error(response.data.error);
     }

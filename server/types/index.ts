@@ -9,6 +9,11 @@ export interface Word {
   isFavorite: boolean;
 }
 
+export interface StudyWordResponse {
+  word: Word;
+  unlearnedCount: number;
+}
+
 export interface Answer {
   id: number;
   wordId: number;

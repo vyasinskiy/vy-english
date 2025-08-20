@@ -61,11 +61,11 @@ export const StudyCard: React.FC<StudyCardProps> = ({
     try {
       setLoading(true);
       setError(null);
-      const word = await wordsApi.getStudyWord(
+      const studyWordResponse = await wordsApi.getStudyWord(
         favoriteOnly,
         excludeCurrent && currentWord ? currentWord.id : undefined
       );
-      setCurrentWord(word);
+      setCurrentWord(studyWordResponse.word);
       setAnswer('');
       setResult(null);
       setIsExampleRevealed(false);
