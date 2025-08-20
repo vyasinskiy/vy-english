@@ -1,0 +1,63 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Build Docker image
+        run: docker build -t english-words-app:latest .
+
+      - name: Save Docker image
+        run: docker save english-words-app:latest -o image.tar
+
+      - name: Copy image to EC2
+        env:
+          SSH_KEY: ${{ vars.EC2_SSH_KEY }}
+          EC2_USER: ${{ vars.EC2_USER }}
+          EC2_HOST: ${{ vars.EC2_HOST }}
+        run: |
+          echo "$SSH_KEY" > key.pem
+          chmod 600 key.pem
+          scp -o StrictHostKeyChecking=no -i key.pem image.tar $EC2_USER@$EC2_HOST:~/image.tar
+
+      - name: Deploy on EC2
+        env:
+          SSH_KEY: ${{ vars.EC2_SSH_KEY }}
+          EC2_USER: ${{ vars.EC2_USER }}
+          EC2_HOST: ${{ vars.EC2_HOST }}
+        run: |
+          echo "$SSH_KEY" > key.pem
+          chmod 600 key.pem
+          ssh -o StrictHostKeyChecking=no -i key.pem $EC2_USER@$EC2_HOST <<'CMD'
+            docker load -i image.tar
+            docker stop english-words-app || true
+            docker rm english-words-app || true
+            docker run -d --name english-words-app -p 80:5000 english-words-app:latest
+            for i in {1..10}; do
+              if docker ps | grep english-words-app >/dev/null; then
+                echo "Container started"
+                exit 0
+              fi
+              sleep 3
+            done
+            echo "Container failed to start"
+            exit 1
+          CMD

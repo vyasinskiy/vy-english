@@ -4,7 +4,8 @@ import {
   CreateWordRequest, 
   UpdateWordRequest, 
   ApiResponse, 
-  Word 
+  Word,
+  StudyWordResponse, 
 } from '../types';
 
 const router = Router();
@@ -28,7 +29,7 @@ router.get('/', async (req: Request, res: Response<ApiResponse<Word[]>>) => {
 });
 
 // Получить слово для изучения (без правильного ответа)
-router.get('/study', async (req: Request, res: Response<ApiResponse<Word>>) => {
+router.get('/study', async (req: Request, res: Response<ApiResponse<StudyWordResponse>>) => {
   try {
     const { favoriteOnly, excludeId } = req.query as { favoriteOnly?: string; excludeId?: string };
     
@@ -62,32 +63,8 @@ router.get('/study', async (req: Request, res: Response<ApiResponse<Word>>) => {
         take: 1
       });
       if (candidates[0]) {
-        return res.json({ success: true, data: candidates[0] });
+        return res.json({ success: true, data: {word: candidates[0], unlearnedCount: totalUnlearned } });
       }
-    }
-
-    // Фоллбек: любой подходящий пул (например, когда все уже когда-то были отвечены)
-    const whereAny = {
-      ...whereClause,
-      ...excludeCondition,
-    } as const;
-
-    const totalAny = await prisma.word.count({ where: whereAny });
-    if (totalAny === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'No words available for study' 
-      });
-    }
-
-    const randomSkipAny = Math.floor(Math.random() * totalAny);
-    const anyCandidates = await prisma.word.findMany({
-      where: whereAny,
-      skip: randomSkipAny,
-      take: 1
-    });
-    if (anyCandidates[0]) {
-      return res.json({ success: true, data: anyCandidates[0] });
     }
 
     return res.status(404).json({ success: false, error: 'No words available for study' });

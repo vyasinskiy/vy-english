@@ -10,6 +10,7 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  Snackbar,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -44,6 +45,8 @@ export const StudyCard: React.FC<StudyCardProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isExampleRevealed, setIsExampleRevealed] = useState(false);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [todayCorrectAnswers, setTodayCorrectAnswers] = useState(0);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [formData, setFormData] = useState<UpdateWordRequest>({
     english: '',
@@ -58,16 +61,16 @@ export const StudyCard: React.FC<StudyCardProps> = ({
   try {
       setLoading(true);
       setError(null);
-      const word = await wordsApi.getStudyWord(
+      const studyWordResponse = await wordsApi.getStudyWord(
         favoriteOnly,
         excludeCurrent && currentWord ? currentWord.id : undefined
       );
-      setCurrentWord(word);
+      setCurrentWord(studyWordResponse.word);
       setAnswer('');
       setResult(null);
-  setIsExampleRevealed(false);
-  setIsAnswerRevealed(false);
-  setShouldFocusInput(true);
+      setIsExampleRevealed(false);
+      setIsAnswerRevealed(false);
+      setShouldFocusInput(true);
     } catch (err: unknown) {
       setError('Failed to load word');
     } finally {
@@ -99,6 +102,10 @@ export const StudyCard: React.FC<StudyCardProps> = ({
         answer: answer.trim(),
       });
       setResult(result);
+      setTodayCorrectAnswers(result.todayCorrectAnswers);
+      if (result.isCorrect || result.isSynonym) {
+        setSnackbarOpen(true);
+      }
       if (result.isSynonym) {
         setEnteredSynonyms((prev) => [...prev, answer]);
         setAnswer('');
@@ -366,6 +373,16 @@ export const StudyCard: React.FC<StudyCardProps> = ({
         </Button>
         </CardContent>
       </Card>
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={3000}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert onClose={() => setSnackbarOpen(false)} severity="info" sx={{ width: '100%' }}>
+          Correct answers today: {todayCorrectAnswers}
+        </Alert>
+      </Snackbar>
 
       <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Edit Word</DialogTitle>
