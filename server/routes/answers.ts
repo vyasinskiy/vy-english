@@ -117,6 +117,12 @@ router.post('/check', async (req: Request<{}, {}, CheckAnswerRequest>, res: Resp
       }
     });
 
+    const totalCorrectAnswers = await prisma.answer.count({
+      where: {
+        isCorrect: true,
+      }
+    });
+
     const totalWords = await prisma.word.count();
 
     const response: CheckAnswerResponse = {
@@ -126,6 +132,7 @@ router.post('/check', async (req: Request<{}, {}, CheckAnswerRequest>, res: Resp
       isSynonym: isSynonym || undefined,
       correctAnswer: word.english,
       todayCorrectAnswers,
+      totalCorrectAnswers,
       totalWords
     };
     

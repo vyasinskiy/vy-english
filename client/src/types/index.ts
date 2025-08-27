@@ -45,6 +45,7 @@ export interface CheckAnswerResponse {
   isSynonym?: boolean;
   correctAnswer: string;
   todayCorrectAnswers: number;
+  totalCorrectAnswers: number;
   totalWords: number;
 }
 
