@@ -116,14 +116,24 @@ router.post('/check', async (req: Request<{}, {}, CheckAnswerRequest>, res: Resp
         }
       }
     });
-    
+
+    const totalCorrectAnswers = await prisma.answer.count({
+      where: {
+        isCorrect: true,
+      }
+    });
+
+    const totalWords = await prisma.word.count();
+
     const response: CheckAnswerResponse = {
       isCorrect,
       isPartial,
       hint: isSynonym ? 'Это синоним. Попробуйте другое слово.' : (isPartial ? hint : undefined),
       isSynonym: isSynonym || undefined,
       correctAnswer: word.english,
-      todayCorrectAnswers
+      todayCorrectAnswers,
+      totalCorrectAnswers,
+      totalWords
     };
     
     return res.json({ success: true, data: response });

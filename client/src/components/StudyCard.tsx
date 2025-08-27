@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  LinearProgress,
 } from '@mui/material';
 import {
   Favorite,
@@ -32,9 +33,9 @@ interface StudyCardProps {
   favoriteOnly?: boolean;
 }
 
-export const StudyCard: React.FC<StudyCardProps> = ({ 
-  onWordCompleted, 
-  favoriteOnly = false 
+export const StudyCard: React.FC<StudyCardProps> = ({
+  onWordCompleted,
+  favoriteOnly = false
 }) => {
   const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -47,6 +48,8 @@ export const StudyCard: React.FC<StudyCardProps> = ({
   const [isExampleRevealed, setIsExampleRevealed] = useState(false);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [todayCorrectAnswers, setTodayCorrectAnswers] = useState(0);
+  const [totalCorrectAnswers, setTotalCorrectAnswers] = useState(0);
+  const [totalWords, setTotalWords] = useState(0);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [formData, setFormData] = useState<UpdateWordRequest>({
     english: '',
@@ -103,6 +106,8 @@ export const StudyCard: React.FC<StudyCardProps> = ({
       });
       setResult(result);
       setTodayCorrectAnswers(result.todayCorrectAnswers);
+      setTotalCorrectAnswers(result.totalCorrectAnswers);
+      setTotalWords(result.totalWords);
       if (result.isCorrect || result.isSynonym) {
         setSnackbarOpen(true);
       }
@@ -132,7 +137,7 @@ export const StudyCard: React.FC<StudyCardProps> = ({
 
   const handleToggleFavorite = async () => {
     if (!currentWord) return;
-    
+
     try {
       const updatedWord = await wordsApi.toggleFavorite(currentWord.id);
       setCurrentWord(updatedWord);
@@ -202,8 +207,8 @@ export const StudyCard: React.FC<StudyCardProps> = ({
           No words available for study
         </Typography>
         <Typography color="text.secondary">
-          {favoriteOnly 
-            ? 'Add some words to favorites to study them' 
+          {favoriteOnly
+            ? 'Add some words to favorites to study them'
             : 'Add some words to start studying'
           }
         </Typography>
@@ -215,162 +220,162 @@ export const StudyCard: React.FC<StudyCardProps> = ({
     <>
       <Card sx={{ minWidth: 400, maxWidth: 600 }}>
         <CardContent>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-          <Typography variant="h5" component="div">
-            {currentWord.russian}
-          </Typography>
-          <Box display="flex" alignItems="center">
-            <Tooltip title={currentWord.isFavorite ? 'Remove from favorites' : 'Add to favorites'}>
-              <IconButton onClick={handleToggleFavorite} color="primary">
-                {currentWord.isFavorite ? <Favorite /> : <FavoriteBorder />}
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Edit word">
-              <IconButton onClick={handleEditOpen} color="primary">
-                <Edit />
-              </IconButton>
-            </Tooltip>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h5" component="div">
+              {currentWord.russian}
+            </Typography>
+            <Box display="flex" alignItems="center">
+              <Tooltip title={currentWord.isFavorite ? 'Remove from favorites' : 'Add to favorites'}>
+                <IconButton onClick={handleToggleFavorite} color="primary">
+                  {currentWord.isFavorite ? <Favorite /> : <FavoriteBorder />}
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Edit word">
+                <IconButton onClick={handleEditOpen} color="primary">
+                  <Edit />
+                </IconButton>
+              </Tooltip>
+            </Box>
           </Box>
-        </Box>
 
-        <Box mb={3}>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Example in Russian:
-          </Typography>
-          <Typography variant="body1" sx={{ fontStyle: 'italic' }}>
-            {currentWord.exampleRu}
-          </Typography>
-        </Box>
+          <Box mb={3}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Example in Russian:
+            </Typography>
+            <Typography variant="body1" sx={{ fontStyle: 'italic' }}>
+              {currentWord.exampleRu}
+            </Typography>
+          </Box>
 
-        <Box mb={3}>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Example in English:
-          </Typography>
-          <Box
-            onClick={handleRevealExample}
-            sx={{
-              position: 'relative',
-              cursor: isExampleRevealed ? 'default' : 'pointer',
-              userSelect: isExampleRevealed ? 'text' : 'none',
-            }}
-          >
-            <Typography
-              variant="body1"
+          <Box mb={3}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Example in English:
+            </Typography>
+            <Box
+              onClick={handleRevealExample}
               sx={{
-                fontStyle: 'italic',
-                filter: isExampleRevealed ? 'none' : 'blur(6px)',
-                transition: 'filter 0.2s ease',
+                position: 'relative',
+                cursor: isExampleRevealed ? 'default' : 'pointer',
+                userSelect: isExampleRevealed ? 'text' : 'none',
               }}
             >
-              {currentWord.exampleEn}
-            </Typography>
-            {!isExampleRevealed && (
-              <Chip
-                size="small"
-                label="Click to reveal"
-                color="primary"
-                sx={{ position: 'absolute', top: -8, right: 0 }}
-              />
-            )}
-          </Box>
-        </Box>
-
-  <form onSubmit={handleSubmit}>
-
-          <TextField
-            fullWidth
-            label="Enter English word"
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            disabled={loading || result?.isCorrect || isExampleRevealed || isAnswerRevealed}
-            inputRef={inputRef}
-            sx={{ mb: 2 }}
-            autoComplete="off"
-          />
-
-          {isAnswerRevealed && (
-            <Box mb={1}>
-              <Alert icon={<CheckCircle />} severity="info">
-                Correct answer: <strong>{currentWord.english}</strong>
-              </Alert>
-            </Box>
-          )}
-
-          {isExampleRevealed && (
-            <Box mb={2}>
-              <Alert icon={<Info />} severity="info">
-                English example revealed. Input is locked. Click Next to continue.
-              </Alert>
-            </Box>
-          )}
-
-          {result && (
-            <Box mb={2}>
-              {result.isCorrect ? (
-                <Alert icon={<CheckCircle />} severity="success">
-                  Correct! Well done!
-                </Alert>
-              ) : result.isSynonym ? (
-                <Alert icon={<Info />} severity="info">
-                  This is synonym, try another word. Entered synonyms:<br></br>
-                  <ul style={{ margin: 0, paddingLeft: 20 }}>
-                    {enteredSynonyms.map((syn, idx) => (
-                      <li key={idx}><strong>{syn}</strong></li>
-                    ))}
-                  </ul>
-                </Alert>
-              ) : result.isPartial ? (
-                <Alert icon={<Info />} severity="info">
-                  {result.hint}
-                </Alert>
-              ) : (
-                <Alert icon={<Error />} severity="error">
-                  Incorrect. The correct answer is: <strong>{result.correctAnswer}</strong>
-                </Alert>
+              <Typography
+                variant="body1"
+                sx={{
+                  fontStyle: 'italic',
+                  filter: isExampleRevealed ? 'none' : 'blur(6px)',
+                  transition: 'filter 0.2s ease',
+                }}
+              >
+                {currentWord.exampleEn}
+              </Typography>
+              {!isExampleRevealed && (
+                <Chip
+                  size="small"
+                  label="Click to reveal"
+                  color="primary"
+                  sx={{ position: 'absolute', top: -8, right: 0 }}
+                />
               )}
             </Box>
-          )}
+          </Box>
+
+          <form onSubmit={handleSubmit}>
+
+            <TextField
+              fullWidth
+              label="Enter English word"
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              disabled={loading || result?.isCorrect || isExampleRevealed || isAnswerRevealed}
+              inputRef={inputRef}
+              sx={{ mb: 2 }}
+              autoComplete="off"
+            />
+
+            {isAnswerRevealed && (
+              <Box mb={1}>
+                <Alert icon={<CheckCircle />} severity="info">
+                  Correct answer: <strong>{currentWord.english}</strong>
+                </Alert>
+              </Box>
+            )}
+
+            {isExampleRevealed && (
+              <Box mb={2}>
+                <Alert icon={<Info />} severity="info">
+                  English example revealed. Input is locked. Click Next to continue.
+                </Alert>
+              </Box>
+            )}
+
+            {result && (
+              <Box mb={2}>
+                {result.isCorrect ? (
+                  <Alert icon={<CheckCircle />} severity="success">
+                    Correct! Well done!
+                  </Alert>
+                ) : result.isSynonym ? (
+                  <Alert icon={<Info />} severity="info">
+                    This is synonym, try another word. Entered synonyms:<br></br>
+                    <ul style={{ margin: 0, paddingLeft: 20 }}>
+                      {enteredSynonyms.map((syn, idx) => (
+                        <li key={idx}><strong>{syn}</strong></li>
+                      ))}
+                    </ul>
+                  </Alert>
+                ) : result.isPartial ? (
+                  <Alert icon={<Info />} severity="info">
+                    {result.hint}
+                  </Alert>
+                ) : (
+                  <Alert icon={<Error />} severity="error">
+                    Incorrect. The correct answer is: <strong>{result.correctAnswer}</strong>
+                  </Alert>
+                )}
+              </Box>
+            )}
+
+            <Button
+              variant="text"
+              color="secondary"
+              fullWidth
+              sx={{ mt: 1, mb: 1 }}
+              onClick={() => setIsAnswerRevealed(true)}
+              disabled={isAnswerRevealed || Boolean(result && !result.isCorrect && !result.isPartial && !result.isSynonym)}
+            >
+              Show Answer
+            </Button>
+
+            <Button
+              type="submit"
+              variant="contained"
+              fullWidth
+              disabled={loading || !answer.trim() || result?.isCorrect || isExampleRevealed || isAnswerRevealed || Boolean(result && !result.isCorrect && !result.isPartial && !result.isSynonym)}
+            >
+              {loading ? 'Checking...' : 'Check Answer'}
+            </Button>
+          </form>
 
           <Button
             variant="text"
-            color="secondary"
             fullWidth
-            sx={{ mt: 1, mb: 1 }}
-            onClick={() => setIsAnswerRevealed(true)}
-            disabled={isAnswerRevealed || Boolean(result && !result.isCorrect && !result.isPartial && !result.isSynonym)}
+            sx={{ mt: 1 }}
+            disabled={loading}
+            onClick={() => {
+              setEnteredSynonyms([]);
+              if (autoAdvanceTimeoutRef.current) {
+                window.clearTimeout(autoAdvanceTimeoutRef.current);
+                autoAdvanceTimeoutRef.current = null;
+              }
+              if (result?.isCorrect) {
+                onWordCompleted();
+              }
+              loadNextWord(true);
+            }}
           >
-            Show Answer
+            Next
           </Button>
-
-          <Button
-            type="submit"
-            variant="contained"
-            fullWidth
-            disabled={loading || !answer.trim() || result?.isCorrect || isExampleRevealed || isAnswerRevealed || Boolean(result && !result.isCorrect && !result.isPartial && !result.isSynonym)}
-          >
-            {loading ? 'Checking...' : 'Check Answer'}
-          </Button>
-        </form>
-
-        <Button
-          variant="text"
-          fullWidth
-          sx={{ mt: 1 }}
-          disabled={loading}
-          onClick={() => {
-            setEnteredSynonyms([]);
-            if (autoAdvanceTimeoutRef.current) {
-              window.clearTimeout(autoAdvanceTimeoutRef.current);
-              autoAdvanceTimeoutRef.current = null;
-            }
-            if (result?.isCorrect) {
-              onWordCompleted();
-            }
-            loadNextWord(true);
-          }}
-        >
-          Next
-        </Button>
         </CardContent>
       </Card>
       <Snackbar
@@ -380,7 +385,22 @@ export const StudyCard: React.FC<StudyCardProps> = ({
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
         <Alert onClose={() => setSnackbarOpen(false)} severity="info" sx={{ width: '100%' }}>
-          Correct answers today: {todayCorrectAnswers}
+          <Box sx={{ width: '100%' }}>
+            <Typography variant="body2">
+              Correct answers today: {todayCorrectAnswers}
+            </Typography>
+          </Box>
+          <br></br>
+          <Box sx={{ width: '100%' }}>
+            <Typography variant="body2">
+              Total progress:
+              <LinearProgress
+                variant="determinate"
+                value={totalCorrectAnswers && totalWords ? (totalCorrectAnswers / totalWords) * 100 : 0}
+                sx={{ mt: 1 }}
+              />
+            </Typography>
+          </Box>
         </Alert>
       </Snackbar>
 
