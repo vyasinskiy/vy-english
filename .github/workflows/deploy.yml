@@ -2,62 +2,126 @@ name: Deploy to EC2
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v3
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ vars.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ vars.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Install dependencies
-        run: npm ci
+    - name: Create ECR repository if not exists
+      run: |
+        aws ecr describe-repositories --repository-names vy-langs || \
+        aws ecr create-repository --repository-name vy-langs
 
-      - name: Build application
-        run: npm run build
+    - name: Apply ECR lifecycle policy
+      run: |
+        aws ecr put-lifecycle-policy \
+          --repository-name vy-langs \
+          --lifecycle-policy-text file://ecr-lifecycle-policy.json
 
-      - name: Build Docker image
-        run: docker build -t english-words-app:latest .
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
 
-      - name: Save Docker image
-        run: docker save english-words-app:latest -o image.tar
+    - name: Build and push Docker image
+      env:
+        ECR_REPOSITORY: vy-langs
+        IMAGE_TAG: ${{ github.ref == 'refs/heads/main' && 'production' || 'test' }}
+      run: |
+        docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+        docker tag $ECR_REPOSITORY:$IMAGE_TAG ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
 
-      - name: Copy image to EC2
-        env:
-          SSH_KEY: ${{ vars.EC2_SSH_KEY }}
-          EC2_USER: ${{ vars.EC2_USER }}
-          EC2_HOST: ${{ vars.EC2_HOST }}
-        run: |
-          echo "$SSH_KEY" > key.pem
-          chmod 600 key.pem
-          scp -o StrictHostKeyChecking=no -i key.pem image.tar $EC2_USER@$EC2_HOST:~/image.tar
+    - name: Prepare variables for deployment
+      # $GITHUB_ENV - специальный файл. Все, что будет записано в $GITHUB_ENV будет доступно переменными в следующих шагах
+      id: vars
+      run: | # ECR_REGISTRY берется из output, возвращаемого шагом login-ecr (не из vars репозитория)
+        echo "IMAGE_TAG=${{ github.ref == 'refs/heads/main' && 'production' || 'test' }}" >> $GITHUB_ENV
+        echo "NODE_ENV=${{ github.ref == 'refs/heads/main' && 'production' || 'test' }}" >> $GITHUB_ENV
+        echo "PORT=${{ github.ref == 'refs/heads/main' && '3000' || '3001' }}" >> $GITHUB_ENV
+        echo "ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}" >> $GITHUB_ENV
 
-      - name: Deploy on EC2
-        env:
-          SSH_KEY: ${{ vars.EC2_SSH_KEY }}
-          EC2_USER: ${{ vars.EC2_USER }}
-          EC2_HOST: ${{ vars.EC2_HOST }}
-        run: |
-          echo "$SSH_KEY" > key.pem
-          chmod 600 key.pem
-          ssh -o StrictHostKeyChecking=no -i key.pem $EC2_USER@$EC2_HOST <<'CMD'
-            docker load -i image.tar
-            docker stop english-words-app || true
-            docker rm english-words-app || true
-            docker run -d --name english-words-app -p 80:5000 english-words-app:latest
-            for i in {1..10}; do
-              if docker ps | grep english-words-app >/dev/null; then
-                echo "Container started"
-                exit 0
-              fi
-              sleep 3
-            done
-            echo "Container failed to start"
+    - name: Create SSH key from base64
+      run: |
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        echo "${{ vars.EC2_SSH_KEY_BASE64 }}" | base64 -d > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        
+        # Проверяем ключ
+        echo "SSH key info:"
+        ssh-keygen -l -f ~/.ssh/deploy_key || echo "Key format check completed"
+
+    - name: Create .env file
+      run: |
+        cat > .env <<EOF
+        NODE_ENV=${{ vars.NODE_ENV }}
+        DATABASE_URL=${{ vars.DATABASE_URL }}
+        PORT=${{ vars.PORT }}
+        EOF
+
+    - name: Create docker-compose.yml
+      run: |
+        cat > docker-compose.yml <<EOF
+        services:
+          vy-langs-app:
+            image: ${ECR_REGISTRY}/vy-langs:${IMAGE_TAG}
+            ports:
+              - "8090:8090"
+            env_file:
+              - .env
+            volumes:
+              - /var/log/vy-langs:/var/log/vy-langs
+            restart: always
+        EOF
+
+    - name: Copy files to EC2
+      run: |
+        scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no docker-compose.yml .env ${{ vars.EC2_USERNAME }}@${{ vars.EC2_HOST }}:/home/ubuntu/vy-langs/
+
+    - name: Deploy on EC2
+      run: |
+        ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ vars.EC2_USERNAME }}@${{ vars.EC2_HOST }} << 'EOF'
+          export AWS_ACCESS_KEY_ID=${{ vars.AWS_ACCESS_KEY_ID }}
+          export AWS_SECRET_ACCESS_KEY=${{ vars.AWS_SECRET_ACCESS_KEY }}
+          export AWS_REGION=${{ vars.AWS_REGION }}
+          export ECR_REGISTRY=${{ env.ECR_REGISTRY }}
+          export IMAGE_TAG=${{ env.IMAGE_TAG }}
+          cd /home/ubuntu/vy-langs/
+          aws ecr get-login-password --region ${{ vars.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
+          docker-compose pull
+          docker-compose up -d
+          sleep 5
+
+          # Получаем имя контейнера (например, vy-langs-app)
+          CONTAINER_ID=$(docker-compose ps -q vy-langs-app)
+
+          # Проверим статус контейнера
+          STATUS=$(docker inspect --format='{{.State.Status}}' "$CONTAINER_ID")
+
+          if [ "$STATUS" != "running" ]; then
+            echo "❌ Контейнер завершился со статусом '$STATUS'"
+            docker logs "$CONTAINER_ID"
             exit 1
-          CMD
+          fi
+
+          # Выполнить миграции
+          docker exec "$CONTAINER_ID" npx prisma migrate deploy
+          docker system prune -af --volumes
+        EOF
+
+    - name: Cleanup
+      run: |
+        rm ~/.ssh/deploy_key docker-compose.yml .env

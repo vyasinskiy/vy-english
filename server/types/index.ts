@@ -54,6 +54,10 @@ export interface CheckAnswerResponse {
   totalWords: number;
 }
 
+export interface ClearAnswersResponse {
+  deletedCount: number;
+}
+
 export interface WordWithAnswers extends Word {
   answers: Answer[];
 }

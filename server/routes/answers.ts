@@ -4,7 +4,8 @@ import {
   CheckAnswerRequest, 
   CheckAnswerResponse, 
   ApiResponse, 
-  Answer 
+  Answer,
+  ClearAnswersResponse,
 } from '../types';
 
 const router = Router();
@@ -204,6 +205,20 @@ router.get('/stats', async (req: Request, res: Response<ApiResponse<any>>) => {
     return res.status(500).json({ 
       success: false, 
       error: 'Failed to fetch stats' 
+    });
+  }
+});
+
+// Очистить все ответы
+router.delete('/', async (req: Request, res: Response<ApiResponse<ClearAnswersResponse>>) => {
+  try {
+    const result = await prisma.answer.deleteMany();
+    return res.json({ success: true, data: { deletedCount: result.count } });
+  } catch (error) {
+    console.error('Error clearing answers:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to clear answers'
     });
   }
 });

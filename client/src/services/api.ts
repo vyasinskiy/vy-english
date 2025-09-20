@@ -7,7 +7,8 @@ import {
   CheckAnswerResponse, 
   ApiResponse, 
   Stats, 
-  StudyWordResponse
+  StudyWordResponse,
+  ClearAnswersResponse,
 } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5500/api';
@@ -94,6 +95,14 @@ export const answersApi = {
 
   getStats: async (): Promise<Stats> => {
     const response = await api.get<ApiResponse<Stats>>('/answers/stats');
+    if (!response.data.success) {
+      throw new Error(response.data.error);
+    }
+    return response.data.data!;
+  },
+
+  clearAll: async (): Promise<ClearAnswersResponse> => {
+    const response = await api.delete<ApiResponse<ClearAnswersResponse>>('/answers');
     if (!response.data.success) {
       throw new Error(response.data.error);
     }
